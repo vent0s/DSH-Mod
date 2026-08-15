@@ -9,6 +9,9 @@
 #   /mod-workspace-open   (native path open, loopback-only authority)
 # - browser half (exports["./client"]) registers the '#' trigger source named
 #   "files" on ctx.inputTriggers, backed by /mod-workspace-files.search.
+#   Candidates are native absolute paths and a pick inserts that full path.
+#   The browser half also fills the stock sidebar.footer.action slot with an
+#   "open workspace folder" menu backed by /mod-workspace-open.
 #
 # If the fork/profile also mounts the in-tree ui-files row (the first local
 # commit), disable it: this mod owns the '#' "files" source. On an unmodified

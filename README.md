@@ -2,10 +2,11 @@
 
 为 DeepSeek Harness Web 提供两个工作区相关能力的 DSH 插件包：
 
-- **`#` 工作区文件引用**：在会话输入框输入 `#` 后，按当前会话 `cwd`（回退到所属工作区路径）搜索工作区文件；选择候选项后插入 `#相对路径 ` 文本引用。
+- **`#` 工作区文件引用**：在会话输入框输入 `#` 后，按当前会话 `cwd`（回退到所属工作区路径）搜索工作区文件；候选项直接显示原生绝对路径（Windows 下为 `盘符:\目录\文件`），选择后把该完整路径插入输入框。
+- **打开工作区目录**：在侧边栏底部 Settings 上方注册“打开工作区目录”按钮（使用普通 deepseek-harness 自带的 `sidebar.footer.action` slot，无需修改本体）。按钮列出所有工作区，选择后通过 `/mod-workspace-open` 打开；仅 loopback 连接且 Host 报告可打开时显示。
 - **原生打开目录的 RPC 通道**：`/mod-workspace-open` 以 loopback-only 权限把路径交给操作系统的默认打开方式（macOS `open` / Windows `Invoke-Item` / Linux `xdg-open`，WSL 转交 Windows），并提供 `describe` 能力探测。
 
-该包作为 profile bundle 安装：`cordis.patch.yml` 只插入一个 `dsh-mod` 行，Node 半边注册两个基于 `ctx.connection.rpc.handle` 的通用 RPC 通道，浏览器半边通过 `ctx.inputTriggers` 注册 `#` 源。插件不修改 `@deepseek-ai/dsh-host-apiproxy` 的静态 `RpcMethodMap`，也不依赖上游尚未合入的 `host.searchFiles`/`host.openPath`。
+该包作为 profile bundle 安装：`cordis.patch.yml` 只插入一个 `dsh-mod` 行，Node 半边注册两个基于 `ctx.connection.rpc.handle` 的通用 RPC 通道；浏览器半边通过 `ctx.inputTriggers` 注册 `#` 源，并通过原生的 `sidebar.footer.action` slot 注册“打开工作区目录”动作。插件不修改 `@deepseek-ai/dsh-host-apiproxy` 的静态 `RpcMethodMap`，也不依赖上游尚未合入的 `host.searchFiles`/`host.openPath`。
 
 ## 安装
 
@@ -28,7 +29,8 @@ dsh plugin --profile web add .
 
 1. 启动 Web profile：`dsh --profile web`。
 2. 在输入框输入 `#`，继续输入文件名片段。
-3. 选择候选项，输入框替换为 `#相对路径 `。
+3. 选择候选项，输入框替换为完整绝对路径，例如 `D:\repo\src\index.ts `。
+4. 点击侧边栏底部“打开工作区目录”，选择一个工作区即可在系统文件管理器中打开该目录。
 
 ## 布局
 
@@ -36,15 +38,15 @@ dsh plugin --profile web add .
 |---|---|
 | `cordis.patch.yml` | profile patch layer：插入 `dsh-mod` 条目 |
 | `lib/index.js` | Host 半边：`/mod-workspace-files` 与 `/mod-workspace-open` RPC 通道 |
-| `lib/client.js` | Browser 半边：`#` 触发源（`window.__ModuleLoader__` bundle） |
+| `lib/client.js` | Browser 半边：`#` 触发源 + `sidebar.footer.action` 打开工作区目录动作（`window.__ModuleLoader__` bundle） |
 | `package.json` | `dsh.bundle` + `dsh.client` 声明与导出 |
 
-## 与当前 deepseek-harness fork 的边界
+## 开箱即用边界
 
-当前 fork 中的两个 commit 还包含上游静态 RPC（`host.searchFiles`、`host.openPath`、`host.describe.canOpenPath`）和 `ui-workspace` 行菜单“在文件管理器中打开”。其中 `#` 文件引用已经可以完全由本插件替代；但 **open-folder 的 UI 入口目前无法在不动 `ui-workspace` 的前提下从外部贡献**（工作区行菜单没有对应的 slot 扩展点）。
+本包面向**未修改的普通 deepseek-harness**：Host 能力走通用 `ctx.connection.rpc.handle` 通道，文件引用走既有 `ctx.inputTriggers` 的 `#` pipeline，打开工作区目录走普通 harness 已经声明的 `sidebar.footer.action` slot，所以不需要先给 deepseek-harness 打任何补丁。
 
-建议的上游 seam：在 `ui-workspace` 的工作区行 `...` 菜单声明一个 list slot（例如 `sidebar.workspaces.workspaceRowAction`），由 owner 传入 `{ workspaceId, path }`；随后本插件可以注册一个“在文件管理器中打开”动作，通过 `/mod-workspace-open` 的 `describe` + `open` 完成。未合入前，open-folder UI 暂时保留在 fork 的 `ui-workspace` 补丁中。
+和 fork 中行菜单版本的区别只是入口位置：普通 harness 的工作区行 `...` 菜单没有对外扩展点，因此本包把“打开目录”放在侧边栏底部（可以列出并打开任意工作区），而不是放在每一行的 `...` 菜单里。若以后上游给 `ui-workspace` 行菜单增加 slot seam，可以再追加一个行内入口。
 
 ## Model Experience
 
-浏览器表现层插件：插入的 `#path` 以普通文本进入用户消息，菜单浏览和 Host 文件搜索不产生模型 token；不改写任何早期请求 token，因此 KV Cache 影响为 append-only。
+浏览器表现层插件：插入的完整绝对路径以普通文本进入用户消息，菜单浏览和 Host 文件搜索不产生模型 token；不改写任何早期请求 token，因此 KV Cache 影响为 append-only。
