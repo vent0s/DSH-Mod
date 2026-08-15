@@ -1,0 +1,46 @@
+{
+  "name": "@vent0s/dsh-mod-workspace-files",
+  "version": "0.1.0",
+  "description": "DSH-Mod: workspace file '#' trigger menu and native workspace-folder open RPC for DeepSeek Harness Web",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vent0s/DSH-Mod.git"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./src/client.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "src/index.d.ts",
+    "src/client.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-input-trigger"
+      ],
+      "platform": "web"
+    }
+  },
+  "license": "MIT"
+}

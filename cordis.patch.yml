@@ -1,0 +1,22 @@
+# DSH-Mod bundle patch.
+#
+# Applied after the profile's in-box bundle layers (dsh-base then dsh-web-app)
+# and before the profile/user cordis.patch.yml layers.
+#
+# One dual-face row:
+# - node half (package root) registers two generic Connection RPC channels:
+#   /mod-workspace-files  (file search, trusted-host authority)
+#   /mod-workspace-open   (native path open, loopback-only authority)
+# - browser half (exports["./client"]) registers the '#' trigger source named
+#   "files" on ctx.inputTriggers, backed by /mod-workspace-files.search.
+#
+# If the fork/profile also mounts the in-tree ui-files row (the first local
+# commit), disable it: this mod owns the '#' "files" source. On an unmodified
+# upstream tree the id is absent and the Loader reports the usual patch warning.
+- id: ui-files
+  disabled: true
+
+# Keep the row id stable: profile overlays can target it as `dsh-mod`.
+- insert:
+    - id: dsh-mod
+      name: '@vent0s/dsh-mod-workspace-files'
