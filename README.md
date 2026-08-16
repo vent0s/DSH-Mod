@@ -2,8 +2,8 @@
 
 为 DeepSeek Harness Web 提供两个工作区相关能力的 DSH 插件包：
 
-- **`#` 工作区文件引用**：在会话输入框输入 `#` 后，按当前会话 `cwd`（回退到所属工作区路径）搜索工作区文件；候选项直接显示原生绝对路径（Windows 下为 `盘符:\目录\文件`），选择后把该完整路径插入输入框。
-- **打开工作区目录**：在侧边栏底部 Settings 上方注册“打开工作区目录”按钮（使用普通 deepseek-harness 自带的 `sidebar.footer.action` slot，无需修改本体）。按钮列出所有工作区，选择后通过 `/mod-workspace-open` 打开；仅 loopback 连接且 Host 报告可打开时显示。
+- **`#` 工作区文件引用**：在会话输入框输入 `#` 后，按当前会话 `cwd`（回退到所属工作区路径）搜索工作区文件；候选项直接显示原生绝对路径（Windows 下为 `盘符:\目录\文件`），选择后把该完整路径插入输入框。（本地适配版：普通 harness 的触发管线只认 `/` 与 `@`，因此本版改为注册到官方 `conversation.input.overlay` 槽，通过 `sessions.provide` 发布的 `useInput`/`inputActions` 读写输入机器状态，`#` 体验不变、不改 harness 本体。）
+- **打开工作区目录**：在会话标题栏右侧注册“打开工作区目录”按钮（使用普通 deepseek-harness 自带的 `conversation.session.header.actions` slot，无需修改本体）。点击后在系统文件管理器中打开当前会话所属工作区的目录；仅 loopback 连接、Host 报告可打开、且会话归属某工作区时显示。（工作区行 `⋯` 菜单没有对外扩展点，因此入口放在会话标题栏；侧边栏底部方案见上游版。）
 - **原生打开目录的 RPC 通道**：`/mod-workspace-open` 以 loopback-only 权限把路径交给操作系统的默认打开方式（macOS `open` / Windows `Invoke-Item` / Linux `xdg-open`，WSL 转交 Windows），并提供 `describe` 能力探测。
 
 该包作为 profile bundle 安装：`cordis.patch.yml` 只插入一个 `dsh-mod` 行，Node 半边注册两个基于 `ctx.connection.rpc.handle` 的通用 RPC 通道；浏览器半边通过 `ctx.inputTriggers` 注册 `#` 源，并通过原生的 `sidebar.footer.action` slot 注册“打开工作区目录”动作。插件不修改 `@deepseek-ai/dsh-host-apiproxy` 的静态 `RpcMethodMap`，也不依赖上游尚未合入的 `host.searchFiles`/`host.openPath`。
@@ -30,7 +30,7 @@ dsh plugin --profile web add .
 1. 启动 Web profile：`dsh --profile web`。
 2. 在输入框输入 `#`，继续输入文件名片段。
 3. 选择候选项，输入框替换为完整绝对路径，例如 `D:\repo\src\index.ts `。
-4. 点击侧边栏底部“打开工作区目录”，选择一个工作区即可在系统文件管理器中打开该目录。
+4. 点击会话标题栏右侧的“打开工作区目录”按钮，即可在系统文件管理器中打开当前会话所属工作区的目录。
 
 ## 布局
 
@@ -38,7 +38,7 @@ dsh plugin --profile web add .
 |---|---|
 | `cordis.patch.yml` | profile patch layer：插入 `dsh-mod` 条目 |
 | `lib/index.js` | Host 半边：`/mod-workspace-files` 与 `/mod-workspace-open` RPC 通道 |
-| `lib/client.js` | Browser 半边：`#` 触发源 + `sidebar.footer.action` 打开工作区目录动作（`window.__ModuleLoader__` bundle） |
+| `lib/client.js` | Browser 半边：`#` 文件菜单（`conversation.input.overlay` 槽，本地适配版）+ `conversation.session.header.actions` 打开当前工作区目录动作（`window.__ModuleLoader__` bundle） |
 | `package.json` | `dsh.bundle` + `dsh.client` 声明与导出 |
 
 ## 开箱即用边界
