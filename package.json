@@ -22,6 +22,7 @@
   },
   "files": [
     "lib/index.js",
+    "lib/gateway.js",
     "lib/client.js",
     "cordis.patch.yml",
     "src/index.d.ts",
