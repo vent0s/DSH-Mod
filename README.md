@@ -53,15 +53,17 @@ dsh plugin --profile web add .
 
 1. 电脑：运行 `start-dsh.bat`，在 "DSH Server" 窗口找到 `dsh-mod-gateway ... pairing code:` 行（或在 bat 里设置自己记得住的 `DSH_MOD_GATEWAY_CODE`）。
 2. 手机（同一 WiFi 或 Tailscale）：浏览器打开窗口里打印的任一 `http://<IP>:3180/` 地址，进入“DSH 远程控制台”。
-3. 输入配对码完成配对，点“进入 DSH”；把该页加入主屏幕即成"App"。**配对一次长期有效**（令牌 1 年，同时备份在手机本地，换 LAN/Tailscale 地址或 cookie 丢失都会自动恢复，不再要码）。
-4. 建议把 Tailscale 地址（`http://100.x.x.x:3180/`）作为固定入口存进连接列表——家里家外都是同一个地址，一份配对走天下。
-5. 换新手机/清了存储：凭配对码重新配对即可（配对码固定不变，人不在家也能凭记忆输入）。吊销入口用于踢掉所有已配对设备（配对码不变）；怀疑配对码泄露时在电脑上改 `DSH_MOD_GATEWAY_CODE` 并重启。
+3. 输入配对码完成配对，点“进入 DSH”；把该页加入主屏幕即成"App"。**配对一次长期有效**（令牌 1 年，同时备份在手机本地，换 LAN/Tailscale 地址或 cookie 丢失都会自动恢复，不再要码）。配对码按控制台打印的原样输入即可（`XXXX-XXXX` 带连字符）。
+4. 首次“进入 DSH”时网关会自动向本体完成浏览器会话补种（见安全模型第 4 层），手机端无需再抄 `dsh web` 打印的 `?token=` 地址；会话 cookie 与配对令牌一样长期有效，过期后下次进入会自动重新补种。
+5. 建议把 Tailscale 地址（`http://100.x.x.x:3180/`）作为固定入口存进连接列表——家里家外都是同一个地址，一份配对走天下。
+6. 换新手机/清了存储：凭配对码重新配对即可（配对码固定不变，人不在家也能凭记忆输入）。吊销入口用于踢掉所有已配对设备（配对码不变）；怀疑配对码泄露时在电脑上改 `DSH_MOD_GATEWAY_CODE` 并重启。
 
-**安全模型（三层）**：
+**安全模型（四层）**：
 
 1. 网关配对/令牌闸：无令牌请求（含 WebSocket upgrade）止步于网关，永不触达本体；令牌只存哈希（`$DSH_HOME/.dsh-mod-gateway.json`），cookie 为 HttpOnly + SameSite=Lax；配对/吊销接口拒绝 `sec-fetch-site: cross-site`，每来源 IP 连续 10 次配对失败锁定 2 分钟。
 2. 网关特权方法镜像名单：`settings.*`（除只读 `settings.describe`——DSH Web 客户端启动必需的设置镜像读，缺它侧边栏工作区不加载，经网关鉴权后以 loopback 面目定向转发）、`credentials.*`、`agentPreset.*`、`host.pickDirectory`、`host.openPath`、`llm.discoverModels` 一律 403——手机能干活，拿不到密钥；设置变更与凭据读写永不出电脑。
 3. 上游 Host fence：反代保留客户端原始 Host，本体继续把远程来源判为非 loopback（`--trusted-host` 只放行普通 RPC），特权方法在上游同样钉死 loopback。
+4. 上游浏览器会话补种：本体对首页与全部 `/api` 还有一层 launch-token/cookie 会话（cookie 绑定访问的 host:port）。插件把本进程的 launch token 交给网关；已配对设备首次进入遇到 401 时，网关经环回以 `?token=` 代为换取两份会话 cookie（一份绑定手机访问地址、一份绑定 `127.0.0.1:3080` 供第 2 层的 Host 改写请求使用）并随 303 下发给设备。launch token 只在环回链路上出现，不出进程、不经手机。
 
 **网关自管端点**（不经过反代）：
 
