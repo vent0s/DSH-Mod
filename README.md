@@ -6,9 +6,9 @@
 
 - **`#` 工作区文件引用**：在会话输入框输入 `#` 后，按当前会话 `cwd`（回退到所属工作区路径）搜索工作区文件；候选项直接显示原生绝对路径（Windows 下为 `盘符:\目录\文件`），选择后把该完整路径插入输入框。（本地适配版：普通 harness 的触发管线只认 `/` 与 `@`，因此本版改为注册到官方 `conversation.input.overlay` 槽，通过 `sessions.provide` 发布的 `useInput`/`inputActions` 读写输入机器状态，`#` 体验不变、不改 harness 本体。）
 - **打开工作区目录**：在会话标题栏右侧注册“打开工作区目录”按钮（使用普通 deepseek-harness 自带的 `conversation.session.header.actions` slot，无需修改本体）。点击后在系统文件管理器中打开当前会话所属工作区的目录；仅 loopback 连接、Host 报告可打开、且会话归属某工作区时显示。（工作区行 `⋯` 菜单没有对外扩展点，因此入口放在会话标题栏；侧边栏底部方案见上游版。）
-- **原生打开目录的 RPC 通道**：`/mod-workspace-open` 以 loopback-only 权限把路径交给操作系统的默认打开方式（macOS `open` / Windows `Invoke-Item` / Linux `xdg-open`，WSL 转交 Windows），并提供 `describe` 能力探测。
+- **原生打开目录的 RPC 通道**：`/mod-workspace-open` 把路径交给操作系统的默认打开方式（macOS `open` / Windows `Invoke-Item` / Linux `xdg-open`，WSL 转交 Windows），并提供 `describe` 能力探测。按钮仅在 loopback 页面显示（`connection.isLoopback`）；0.1.3+ 上游已无按通道的 authority 参数，`/api` 整体由浏览器信任 fence（loopback/`--trusted-host` + 浏览器会话）把守。
 
-该包作为 profile bundle 安装：`cordis.patch.yml` 只插入一个 `dsh-mod` 行，Node 半边注册两个基于 `ctx.connection.rpc.handle` 的通用 RPC 通道；浏览器半边通过 `ctx.inputTriggers` 注册 `#` 源，并通过原生的 `sidebar.footer.action` slot 注册“打开工作区目录”动作。插件不修改 `@deepseek-ai/dsh-host-apiproxy` 的静态 `RpcMethodMap`，也不依赖上游尚未合入的 `host.searchFiles`/`host.openPath`。
+该包作为 profile bundle 安装：`cordis.patch.yml` 只插入一个 `dsh-mod` 行，Node 半边注册两个基于 `ctx.connection.rpc.handle` 的通用 RPC 通道；浏览器半边通过官方 `conversation.input.overlay` 槽发布 `#` 文件菜单，并通过 `conversation.session.header.actions` slot 注册“打开工作区目录”动作。插件不触碰上游 `/api` 的 Remote 方法目录（0.1.3+ 为斜杠命名的 `namespace/method` 端点），也不依赖上游的 `fileReferences/list`（`@` 菜单）与 `session/openWorkspacePath`——`#` 插入的是纯文本原生绝对路径，与 `@` 的原子引用芯片互补。
 
 ## 安装
 
@@ -61,8 +61,8 @@ dsh plugin --profile web add .
 **安全模型（四层）**：
 
 1. 网关配对/令牌闸：无令牌请求（含 WebSocket upgrade）止步于网关，永不触达本体；令牌只存哈希（`$DSH_HOME/.dsh-mod-gateway.json`），cookie 为 HttpOnly + SameSite=Lax；配对/吊销接口拒绝 `sec-fetch-site: cross-site`，每来源 IP 连续 10 次配对失败锁定 2 分钟。
-2. 网关特权方法镜像名单：`settings.*`（除只读 `settings.describe`——DSH Web 客户端启动必需的设置镜像读，缺它侧边栏工作区不加载，经网关鉴权后以 loopback 面目定向转发）、`credentials.*`、`agentPreset.*`、`host.pickDirectory`、`host.openPath`、`llm.discoverModels` 一律 403——手机能干活，拿不到密钥；设置变更与凭据读写永不出电脑。
-3. 上游 Host fence：反代保留客户端原始 Host，本体继续把远程来源判为非 loopback（`--trusted-host` 只放行普通 RPC），特权方法在上游同样钉死 loopback。
+2. 网关特权方法拦截名单：`settings/*`（除只读 `settings/describe`——DSH Web 客户端启动必需的设置镜像读，缺它侧边栏工作区不加载）、`credentials/*`、`agentPresets/read|copy|deletePreset`、`directoryPicker/*`、`session/openWorkspacePath`、`llm/discoverModels`、`dynamicCordisRunner` 的执行面（`runHostHalf`/`invoke`/`settleUserRun` 等）一律 403——手机能干活，拿不到密钥；设置变更、凭据读写与宿主侧插件执行永不出电脑。方法名使用 deepseek-harness 0.1.3+ 的斜杠 wire 格式（`/api/settings/update`）。**0.1.5 起上游取消了按方法的 loopback 特权层**（任何浏览器会话都能调全部方法），这张名单因此是配置面在远程访问下的**主防线**，而非纵深冗余。
+3. 上游 Host fence：反代保留客户端原始 Host，本体继续把远程来源判为非 loopback（`--trusted-host` 只放行普通 RPC），特权方法补种路径仍以 loopback 面目定向转发以兼容未配置 `--trusted-host` 的启动。
 4. 上游浏览器会话补种：本体对首页与全部 `/api` 还有一层 launch-token/cookie 会话（cookie 绑定访问的 host:port）。插件把本进程的 launch token 交给网关；已配对设备首次进入遇到 401 时，网关经环回以 `?token=` 代为换取两份会话 cookie（一份绑定手机访问地址、一份绑定 `127.0.0.1:3080` 供第 2 层的 Host 改写请求使用）并随 303 下发给设备。launch token 只在环回链路上出现，不出进程、不经手机。
 
 **网关自管端点**（不经过反代）：

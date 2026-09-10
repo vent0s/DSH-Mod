@@ -1,6 +1,6 @@
 {
   "name": "@vent0s/dsh-mod-workspace-files",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "DSH-Mod: '#' workspace file search that inserts native absolute paths, plus a native workspace-folder open RPC for DeepSeek Harness Web",
   "repository": {
     "type": "git",
@@ -38,7 +38,7 @@
       "inject": [
         "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-modules",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-primitives",
         "@deepseek-ai/dsh-client-ui-sidebar"
