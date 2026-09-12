@@ -23,6 +23,7 @@
   "files": [
     "lib/index.js",
     "lib/gateway.js",
+    "lib/diagnostics.js",
     "lib/client.js",
     "cordis.patch.yml",
     "src/index.d.ts",
@@ -45,6 +46,9 @@
       ],
       "platform": "web"
     }
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js"
   },
   "license": "MIT"
 }

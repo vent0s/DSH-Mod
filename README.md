@@ -46,7 +46,9 @@ dsh plugin --profile web add .
 | `DSH_MOD_GATEWAY_BIND` | `0.0.0.0` | 监听地址 |
 | `DSH_MOD_GATEWAY_TARGET` | `127.0.0.1:$DSH_PORT`(回退 `3080`) | 本体 webserver 地址 |
 | `DSH_MOD_GATEWAY_CODE` | 自动生成 | 自定义配对码：可记住的长期密钥，人在外也能给新设备配对；重启后生效 |
-| `DSH_MOD_GATEWAY_DIAG` | 未设置=关闭 | 置 `1` 开启排障:向代理的 index.html 注入 `window.__diag` 录制器(console/网络/WS 事件),网关输出 upgrade 时序日志(不记录请求/响应体与 cookie 值) |
+| `DSH_MOD_GATEWAY_DIAG` | 未设置=关闭 | 置 `1` 向代理的 index.html 注入旧版 `window.__diag` 录制器与屏幕面板，仅供临时浏览器排障；服务端文件日志无需开启它 |
+| `DSH_MOD_GATEWAY_LOG` | `$DSH_HOME/logs/dsh-mod-gateway.jsonl` | 自动写入服务端连接日志；可设自定义文件路径，设 `0` 关闭。每份 5 MiB，保留当前文件及 `.1`、`.2` 两份历史 |
+| `DSH_MOD_GATEWAY_WS_HANDSHAKE_TIMEOUT_MS` | `15000` | 网关等待本体完成 WebSocket HTTP 握手的最长毫秒数；建立后不对空闲连接使用此超时 |
 | `DSH_HOME` | `~/.dsh` | 状态文件所在目录（与 DSH 本体一致） |
 
 **使用流程**：
@@ -79,6 +81,52 @@ dsh plugin --profile web add .
 
 **已知边界**：明文 HTTP（局域网/Tailscale 内使用，勿暴露公网）；手机端无法使用设置/凭据页（有意为之，用电脑访问 `127.0.0.1:3080` 管理）；用 MagicDNS 主机名访问需在启动参数里为该主机名追加 `--trusted-host`。首次手机访问 Windows 防火墙弹窗需放行。
 
+### 连接日志与 Tailscale 排障
+
+启用网关后，服务端默认持续写入 JSONL 日志。更新已安装的本地插件后，需要重启 DSH 进程才会加载新代码。启动时控制台会打印 `diagnostics:` 文件位置。macOS/Linux 可用：
+
+```sh
+tail -F "${DSH_HOME:-$HOME/.dsh}/logs/dsh-mod-gateway.jsonl"
+```
+
+每行有 UTC 时间 `time`、本次启动标识 `run`；同一请求/连接的事件共用 `id`，`peer` 是直接连接网关的设备地址。默认文件日志不保存请求/响应体、聊天内容、Cookie、Authorization、配对码、URL 查询参数或 WebSocket 消息内容，文件权限为仅当前用户读写。旧版浏览器 `DSH_MOD_GATEWAY_DIAG` 面板是独立的临时排障功能，不属于这份文件日志。
+
+| 事件/字段 | 用途 |
+|-----------|------|
+| `http.start` / `http.complete` / `http.aborted` | 判断请求是否到达、正常完成或被客户端提前中断；`status` 是网关发给客户端的 HTTP 状态 |
+| `upstreamStatus` / `upstreamMs` / `durationMs` | 本体状态、最后一次向本体请求至收到响应头的耗时、网关从收到请求至完成的总耗时；均为毫秒，不能单独当作 Tailscale 往返延迟 |
+| `http.error` / `ws.error` | `side` 区分 client/upstream/session/gateway，`code` 保留 `ECONNRESET`、`ECONNREFUSED` 等错误码 |
+| `ws.start` / `ws.handshake` / `ws.rejected` | 追踪连接尝试、本体握手状态（成功为 101）和网关拒绝（例如未配对 401） |
+| `ws.closed` | 连接持续时间、最先观测到的断开方向，以及 `handshake_timeout`、`handshake_rejected`、`shutdown` 等原因；方向是观测结果，不等于根因 |
+| `gateway.heartbeat` / `ws.sample` | 每 30 秒记录活动 HTTP/WS 数、事件循环延迟、WS 两个方向的累计字节及空闲时间；没有读取 WS 消息内容或新增应用层探测 |
+| `log.dropped` | 磁盘写入跟不上流量时的丢弃条数；写入队列有上限，日志故障不会阻塞代理请求 |
+
+WebSocket 两端启用 TCP keepalive；客户端离开、上游报错或插件关闭时会释放隧道两端。文件日志只解释到达网关后的流量，无法证明外部设备的网络正常。
+
+如果通过 Tailscale 访问不稳定，先对比本机网关健康探测、系统路由和 Tailscale 自身连通性。macOS 示例（将 `<对端TailscaleIP>` 替换为实际设备地址）：
+
+```sh
+curl --noproxy '*' --max-time 5 http://127.0.0.1:3180/mod-gateway/health
+route -n get <对端TailscaleIP>
+/Applications/Tailscale.app/Contents/MacOS/Tailscale ping --c 3 --timeout 3s <对端TailscaleIP>
+ping -c 3 <对端TailscaleIP>
+/Applications/Tailscale.app/Contents/MacOS/Tailscale netcheck
+```
+
+若 `tailscale ping` 成功、普通访问失败，且对端 `100.x` 地址走家庭路由器/`en0`，应先检查代理 TUN 是否添加了抢占 `100.64.0.0/10` 的排除路由；目标是让对端地址实际走 Tailscale 接口。仅增加代理 `DIRECT` 规则不能证明路由已正确。可在本机操作时暂停代理 TUN 做对照，再检查路由恢复；远程排障时避免直接切断当前连接。Tailscale 显示已连接也不保证系统数据路径正常，参见 [Tailscale 网络配置排障](https://tailscale.com/docs/reference/troubleshooting/network-configuration)。
+
+本体还会用 WebSocket Ping/Pong 判断掉线，目前默认心跳间隔为 2 秒。如果网络或事件循环会出现数秒停顿，可在 `$DSH_HOME/profiles/web/cordis.patch.yml` 中追加以下条目，重启后提高容忍度（代价是真正断网时判定更慢）。这是本体已有的部署配置，和网关的 **HTTP 握手超时** 是两回事；应结合实际断线日志判断，不能仅凭心跳配置认定根因。
+
+```yaml
+- id: typert-gateway
+  config:
+    websocketHeartbeatIntervalMs: 10000
+```
+
+### 回归验证
+
+在本仓库运行 `npm test`。测试仅启动本地临时端口与独立状态目录，覆盖日志轮转/脱敏/写入失败、HTTP 中断、WebSocket 分片握手、握手超时、客户端提前离开、插件加载生命周期及关闭清理，不使用真实配对状态。
+
 
 ## 布局
 
@@ -87,6 +135,7 @@ dsh plugin --profile web add .
 | `cordis.patch.yml` | profile patch layer:插入 `dsh-mod` 条目 |
 | `lib/index.js` | Host 半边:`/mod-workspace-files` 与 `/mod-workspace-open` RPC 通道;按环境变量启动网关 |
 | `lib/gateway.js` | 远程访问网关:0.0.0.0 监听、HTTP/WS 反代、配对/令牌/吊销、连接管理页(未导出环境变量时不加载任何监听) |
+| `lib/diagnostics.js` | 有界异步 JSONL 文件日志、轮转及结构化诊断字段过滤 |
 | `lib/client.js` | Browser 半边:`#` 文件菜单(`conversation.input.overlay` 槽,本地适配版)+ `conversation.session.header.actions` 打开当前工作区目录动作(`window.__ModuleLoader__` bundle) |
 | `package.json` | `dsh.bundle` + `dsh.client` 声明与导出 |
 
