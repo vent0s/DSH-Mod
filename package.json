@@ -1,7 +1,7 @@
 {
   "name": "@vent0s/dsh-mod-workspace-files",
   "version": "0.4.0",
-  "description": "DSH-Mod: '#' workspace file search that inserts native absolute paths, plus a native workspace-folder open RPC for DeepSeek Harness Web",
+  "description": "DSH-Mod: repository status, verified Kimi and GLM setup, workspace shortcuts, and remote-access gateway",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vent0s/DSH-Mod.git"
@@ -29,7 +29,12 @@
     "src/index.d.ts",
     "src/client.d.ts",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "lib/providers.js",
+    "docs/upstream-review-2026-09-21.md",
+    "docs/upstream-review-2026-10-18.md",
+    "lib/provider-manager.js",
+    "lib/repo-status.js"
   ],
   "dsh": {
     "bundle": {
@@ -42,13 +47,17 @@
         "@deepseek-ai/dsh-client-modules",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-primitives",
-        "@deepseek-ai/dsh-client-ui-sidebar"
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-settings-models"
       ],
       "platform": "web"
     }
   },
   "scripts": {
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "test:harness": "node --test tests/harness-providers.smoke.js",
+    "test:client": "node --test tests/*-ui.smoke.js",
+    "test:repos-browser": "node --test tests/repos-browser.smoke.js"
   },
   "license": "MIT"
 }

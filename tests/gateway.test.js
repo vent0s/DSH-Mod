@@ -96,6 +96,7 @@ test('JSONL rotation is bounded, private, and drops non-diagnostic fields', asyn
   }
   assert.equal(diagnosticPath('/api/session/list?token=secret'), '/api/session/list')
   assert.equal(diagnosticPath('/files/private-project/secret.txt'), '/other')
+  assert.equal(diagnosticPath('/plugins/events?token=secret'), '/plugins/events')
 })
 
 test('logging overload and disk failure do not break callers', async t => {
@@ -118,7 +119,7 @@ test('logging overload and disk failure do not break callers', async t => {
 test('HTTP completion, auth failure and upstream reset have correlated safe logs', async t => {
   const f = await fixture(t, { handle: (req, res) => {
     if (req.url.startsWith('/api/reset')) { res.writeHead(200); res.write('partial'); setTimeout(() => res.destroy(), 10) }
-    else { req.resume(); res.end('ok') }
+    else { req.resume(); res.setHeader('content-type', 'application/json; charset=utf-8'); res.end('ok') }
   } })
   assert.equal((await fetch(f.base + '/api/session/list?token=QUERY_SECRET', {
     method: 'POST', headers: { cookie: f.cookie, authorization: 'Bearer HEADER_SECRET' }, body: 'BODY_SECRET',
@@ -132,6 +133,7 @@ test('HTTP completion, auth failure and upstream reset have correlated safe logs
     return entries.some(e => e.event === 'http.error' && e.code === 'ECONNRESET') && entries
   })
   assert.ok(entries.some(e => e.status === 200 && e.upstreamStatus === 200 && e.upstreamMs >= 0 && e.path === '/api/session/list'))
+  assert.ok(entries.some(e => e.event === 'http.complete' && e.path === '/api/session/list' && e.responseKind === 'json' && e.responseBytes === 2))
   assert.ok(entries.some(e => e.status === 401))
   assert.ok(entries.some(e => e.status === 403))
   assert.doesNotMatch(await readFile(f.logPath, 'utf8'), new RegExp(`${f.token}|QUERY_SECRET|HEADER_SECRET|BODY_SECRET|TEST-1234`))
@@ -269,4 +271,31 @@ test('plugin activation keeps gateway alive until the Cordis effect is disposed'
   assert.equal(removedChannels, 0)
   await effects[1]()
   await assert.rejects(fetch(`http://127.0.0.1:${port}/mod-gateway/health`))
+})
+
+test('paired remote devices cannot reach model setup or forward API keys', async t => {
+  let forwarded = false
+  const f = await fixture(t, { handle: (_req, res) => { forwarded = true; res.end('unexpected') } })
+  for (const endpoint of ['describe', 'configure']) {
+    const response = await fetch(`${f.base}/mod-providers/${endpoint}`, {
+      method: 'POST', headers: { cookie: f.cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ apiKey: 'DO_NOT_FORWARD_KEY' }),
+    })
+    assert.equal(response.status, 403)
+    await response.text()
+  }
+  assert.equal(forwarded, false)
+  assert.doesNotMatch(await readFile(f.logPath, 'utf8'), /DO_NOT_FORWARD_KEY/)
+})
+
+
+test('new upstream configuration namespaces stay local while settings bootstrap remains available', async t => {
+  const forwarded = []
+  const f = await fixture(t, { handle: (req, res) => { forwarded.push(req.url); req.resume(); res.end('ok') } })
+  for (const endpoint of ['pluginManager/install', 'pluginManager/setEnabled', 'configEditor/edit', 'deepseekAccount/signIn', 'credentials/futureMethod', 'settings/futureMethod']) {
+    const response = await fetch(`${f.base}/api/${endpoint}`, { method: 'POST', headers: { cookie: f.cookie } })
+    assert.equal(response.status, 403, endpoint)
+  }
+  assert.deepEqual(forwarded, [])
+  assert.equal((await fetch(`${f.base}/api/settings/describe`, { method: 'POST', headers: { cookie: f.cookie } })).status, 200)
 })

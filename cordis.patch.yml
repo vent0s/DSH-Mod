@@ -3,21 +3,11 @@
 # Applied after the profile's in-box bundle layers (dsh-base then dsh-web-app)
 # and before the profile/user cordis.patch.yml layers.
 #
-# One dual-face row:
-# - node half (package root) registers two generic Connection RPC channels:
-#   /mod-workspace-files  (file search, trusted-host authority)
-#   /mod-workspace-open   (native path open, loopback-only authority)
-# - browser half (exports["./client"]) registers the '#' trigger source named
-#   "files" on ctx.inputTriggers, backed by /mod-workspace-files.search.
-#   Candidates are native absolute paths and a pick inserts that full path.
-#   The browser half also fills the stock sidebar.footer.action slot with an
-#   "open workspace folder" menu backed by /mod-workspace-open.
-#
-# If the fork/profile also mounts the in-tree ui-files row (the first local
-# commit), disable it: this mod owns the '#' "files" source. On an unmodified
-# upstream tree the id is absent and the Loader reports the usual patch warning.
-- id: ui-files
-  disabled: true
+# Both optional workspace RPCs use the upstream browser trust fence.
+# Client entries use conversation.input.overlay and conversation.session.header.actions.
+# Configure hashFileSearch/openWorkspaceFolder/repoStatus on this row to retire a feature.
+# Older forks mounting their own ui-files should disable that row in their own profile.
+# The native Models provider cards check account access before saving provider routes.
 
 # Keep the row id stable: profile overlays can target it as `dsh-mod`.
 - insert:
