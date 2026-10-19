@@ -78,6 +78,8 @@ test('shipped web profile: repository RPC, header, persisted configuration and n
   await trigger.click()
   const panel = page.locator('.dsh-mod-repo-panel')
   const input = panel.locator('textarea')
+  assert.equal(await input.count(), 0)
+  await panel.getByRole('button', { name: '管理仓库', exact: true }).click()
   await input.waitFor()
   assert.equal(await input.inputValue(), 'example')
   assert.match(await trigger.textContent(), /✎1/)

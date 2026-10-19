@@ -24,6 +24,8 @@
 
 验证紧凑图标、逐仓库详情、路径配置、保存失败、刷新失败、无上游、切换工作区、隐藏页暂停以及卸载取消。新会话选择工作区后，不发送消息即可通过「仓库」按钮填写多个路径；关闭功能后两个入口都不显示。确认远端失败不呈现完全同步。
 
+默认概览显示根仓库的名称和文字状态，路径与检查详情按需展开。agent 修改配置后，未编辑的表单自动同步；存在未保存编辑时保留草稿并提示冲突，重新加载或恢复原值后可继续同步。
+
 ## RS-06 交付
 
 运行 `npm test`、`DSH_HARNESS_ROOT=../deepseek-harness-latest npm run test:client`、包清单检查和 `git diff --check`。校验复制技能文件逐字一致、开发索引和里程碑链接有效。记录尚未实测的运行时边界。
@@ -31,5 +33,7 @@
 ## 自动化结果
 
 已实现 `tests/repos.test.js`、`tests/repos-ui.smoke.js` 和 `tests/repos-browser.smoke.js`。初次验证后端套件 53/53、UI 套件 10/10、真实浏览器集成 1/1；补齐新会话入口后 UI 套件 11/11，并在正式 Chrome 中展开配置面板确认可用。结果日期和边界见里程碑。真实浏览器可用 `DSH_HARNESS_ROOT=../deepseek-harness-latest npm run test:repos-browser` 重跑；设置 `DSH_REPO_SCREENSHOTS` 可导出截图。
+
+展示精简和配置同步修复后 UI 套件 14/14，并在正式 Chrome 验证概览、管理仓库和折叠设置。本轮未改 Host；浏览器集成脚本已适配新入口，但未重跑。
 
 进程并发上限、超时和输出上限已在执行器中实现；尚未单独做大量超时子进程的压力测试。
